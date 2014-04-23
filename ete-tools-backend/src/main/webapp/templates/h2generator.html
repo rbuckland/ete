@@ -1,0 +1,29 @@
+
+    <div class="hero-unit">
+        <h1>H2 Database Generator</h1>
+        <p>
+           This little tool will convert an XLS Spreadsheet into a H2 Database.
+            How ? It uses this library.. TODO
+        </p>
+        <form name="generatorForm" role="form" method="POST" enctype="multipart/form-data" action="/api/h2generator/">
+
+        <p width="50%">
+
+              <div class="form-group">
+                <label>XlS File (*.xls)</label>
+                <input type="file" name="xlsFile" class="form-control">
+              </div>
+              <div class="form-group">
+                <label>Database Name</label>
+                <input type="text" name="databaseName" class="form-control" ng-model="databaseName"/>
+              </div>
+
+        </p>
+
+        <p> And you can download the same file as a Zipped up H2 Database ready for use.</p>
+        <p>
+            <input type="submit" value="Download &raquo;" class="btn btn-success btn-large"></a>
+        </p>
+
+        </form>
+    </div>

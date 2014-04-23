@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" ng-app="AppCore">
+<head>
+    <meta charset="utf-8">
+    <title>My HTML File</title>
+    <link rel="stylesheet" href="css/app.css">
+    <link rel="stylesheet" href="libs/bootstrap-3.1.1-dist/css/bootstrap.css">
+
+    <!-- 3rd party libs -->
+    <script src="libs/angular-file-upload-1.2.9/angular-file-upload-shim.min.js"></script>
+    <script src="libs/angular-1.2.14/angular.js"></script>
+    <script src="libs/angular-1.2.14/angular-route.js"></script>
+    <script src="libs/angular-file-upload-1.2.9/angular-file-upload.js"></script>
+    <script src="libs/vkbeautify-0.99.00.beta/vkbeautify.0.99.00.beta.js"></script>
+    <script src="libs/ui-bootstrap/ui-bootstrap-0.10.0.min.js"></script>
+
+    <!-- my libs -->
+    <script src="js/app.js"></script>
+    <script src="js/ga.js"></script>
+
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+    <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+</head>
+<body ng-app="AppCore">
+
+<div class="container">
+    <div class="row clearfix">
+        <div class="col-md-8 column">
+            <h3 class="text-left">
+                More Data, Faster
+            </h3>
+        </div>
+        <div class="col-md-4 column">
+            <img height="50" src="images/ete_logo.png" />
+        </div>
+    </div>
+
+    <ul class="nav">
+        <li class="active"><a href="#main">Welcome</a></li>
+        <li><a href="#h2generator">H2 DB Generator</a></li>
+        <li><a href="#ete">Extract Services</a></li>
+    </ul>
+
+    <div class="container-fluid">
+        <div class="row-fluid">
+            <div ng-view></div>
+        </div><!--/row-->
+    </div>
+
+</div>
+
+<!-- Le javascript
+   ================================================== -->
+<!-- Placed at the end of the document so the pages load faster -->
+
+<script src="js/services.js"></script>
+<script src="js/controllers.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/directives.js"></script>
+
+</body>
+</html>

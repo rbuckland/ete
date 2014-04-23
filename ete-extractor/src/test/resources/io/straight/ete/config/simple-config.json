@@ -1,0 +1,31 @@
+
+
+"@config:sample" : {
+
+    "@source" : { "@name" : "query1",
+                  "@datasource" : "jdbc://",
+                  "@sql"  : "SELECT id,name,price FROM widget"
+                },
+
+    "@source" : { "@name" : "query1",
+                  "@datasource" : "file://src/test/resources/sample.xls",
+                  "@sql"  : "SELECT id,name,price FROM widget"
+                },
+
+    "ete:source" : { "ete:name" : "query2",
+                     "ete:datasource" : "",
+                     "ete:sql"  : "SELECT id,colour,length FROM widget_properties"
+    },
+    "ete:output" : {
+        "root" : [
+                {
+                "ete:source" : "query1",
+                "ete:pk" : "id",
+                "ete:name" : "sampleResult"
+                "widget"  : { "ete:source" : "query2" }
+                }
+               ]
+    }
+},
+
+

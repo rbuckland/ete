@@ -1,0 +1,48 @@
+<ete:config xmlns:ete="http://io.straight/ete" name="myBasicConfig">
+
+    <ete:output>
+        <ete:per-row name="product" source="products">
+            <ete:per-row name="option" source="options"/>
+        </ete:per-row>
+    </ete:output>
+
+</ete:config>
+<!--
+
+As JSON  this should look like
+
+{ "products" : [
+         {
+             "id":"1","name":"Foobar","description":"blah blah","code":"ABGSFH111", "options" : [
+                  { "productId":"1","option_description":"Curly" },
+                  { "productId":"1","option_description":"Straight" },
+                  { "productId":"1","option_description":"Oblong" },
+                  { "productId":"1","option_description":"Oval" }
+             ]
+          }
+    ]
+}
+
+As XML .. ??
+
+  <product>
+     <option>..</option>
+     <option>..</option>
+  </product>
+  <product>
+     <option>..</option>
+     <option>..</option>
+  </product>
+
+{ "products" :
+
+     [
+       "product" : {
+       },
+       "product" : {
+
+       }
+     ]
+}
+
+-->
