@@ -16,6 +16,7 @@
     <ete:output>
         <products>
             <ete:per-row name="product" source="products">
+                A Test of some Text
                 <options>
                     <ete:per-row name="option" source="options"/>
                 </options>

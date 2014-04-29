@@ -79,6 +79,7 @@ object EteExecutor {
 
       // start the mapping exercise
       val mapper = new EteDataSetMapper(config.rootMapping,dataSetHolder)
+      println(s">>> Executing mapper.output for ${outputStyle}")
       mapper.output(outputStyleHandler)
 
     } finally {

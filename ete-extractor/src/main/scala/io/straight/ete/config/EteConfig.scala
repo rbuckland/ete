@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory
 import EteConfigBuildSupport._
 import scalaz._
 import Scalaz._
+import org.w3c.dom.NodeList
+import io.straight.ete.util.CompletelyUnsupportedError
 
 /**
  * @author rbuckland
@@ -23,7 +25,11 @@ object EteConfig {
   val ETE_NS = "http://io.straight/ete"
   val ETE_NS_PREFIX = "ete"
   val eteNs = scala.xml.NamespaceBinding("ete",ETE_NS,null)
-  val DEFAULT_OUTPUT_NODE = "data"
+  val DEFAULT_OUTPUT_NODE = "rootData"
+
+  // this works in Oxygen .. but fails to collectr what I want here
+  // text()[normalize-space(.) != ''] | //node()[local-name()!=''] .. reverting to Scala
+  val XPathNodesAndNonEmptyText = "node()" // *|text()[normalize-space()]"
 
 
   /**
@@ -41,7 +47,10 @@ object EteConfig {
   def build(configXml: w3cd.Document) : EteConfig = {
     val configName = xpath.evaluate("/ete:config/@name",configXml)
     val outputNode = xpath.evaluate("/ete:config/ete:output",configXml,XPathConstants.NODE).asInstanceOf[org.w3c.dom.Node]
-    return createNew("name",createTreeFromXml(outputNode),null)
+
+    println(s">> outputNode == ${outputNode.getLocalName}")
+    // todo collect the sources
+    return createNew(configName,createTreeFromXml(outputNode),null)
   }
 
   /**
@@ -68,18 +77,21 @@ object EteConfig {
    * @param outputElem
    * @return
    */
-  private def createTreeFromXml(outputElem: w3cd.Node): Tree[OutputNode] =
+  private def createTreeFromXml(outputElem: w3cd.Node): Tree[OutputNode] = {
 
     // three scenarios when we look under the ete:output/ XML node
     // 1. one element, is not xmlns:ete -> that is the name of the Node (the root node)
     // 2. is xmlns:ete -> wrap it in a SimpleNode
     // 3. more than one element of any type or something else -> wrap it in a Simplenode
+    println(s"XML Tree rootNode = ${outputElem.getChildNodes.getLength} ==  ${outputElem.getChildNodes.item(0)}")
 
-    Option(outputElem.getChildNodes.item(0)) match {
-      case Some(c : org.w3c.dom.Element) if !isEteNs(c) => createTree(Some(c.getLocalName),createSubForest(c.getChildNodes))
-      case Some(c : w3cd.Node) => createTree(Some(DEFAULT_OUTPUT_NODE),createSubForest(c.getChildNodes))
+    // the XML should have only 1 Node underneath the output node
+    Option(getNode(outputElem,"*[1]")) match {
+      case Some(c: org.w3c.dom.Element) if !isEteNs(c) => createTree(Some(c.getLocalName), createSubForest(getNodes(c,XPathNodesAndNonEmptyText)))
+      case Some(c: w3cd.Node) => createTree(Some(DEFAULT_OUTPUT_NODE), createSubForest(getNodes(c,XPathNodesAndNonEmptyText)))
       case None => throw new UnsupportedEteConfigError("Missing XML for the mapping /ete:config/ete:output")
     }
+  }
 
   /**
    * This will generate a Sub Forrest of ete:config nodes for all Elements
@@ -87,21 +99,33 @@ object EteConfig {
    * @return
    */
   private def createSubForest(childElements: w3cd.NodeList): Stream[Tree[OutputNode]] = {
-    (0 to childElements.getLength).map( i =>
+    // this is slightly inefficient - we loop twice .. looking for empt text nodes (I tried to sort that in the xpath) but Java would not have it.
+    (0 until childElements.getLength).filter ( i =>
       childElements.item(i) match {
-        case t: w3cd.Text if !isWhitespace(t) => aio(TextNode(t.getNodeValue.trim)).leaf
-        case ete: w3cd.Element if isEteNs(ete) => createEteMappingNode(ete)
-        case e: w3cd.Element => createTree(Some(e.getLocalName),createSubForest(e.getChildNodes))
+        case t: w3cd.Text if stripAllWhitespace(t).length == 0 => false
+        case _ => true
       }
-    ).toStream
+     ).map { i =>
+        childElements.item(i) match {
+          case t: w3cd.Text => aio(TextNode(stripAllWhitespace(t))).leaf
+          case ete: w3cd.Element if isEteNs(ete) => createEteMappingNode(ete)
+          case e: w3cd.Element => createTree(Some(e.getLocalName), createSubForest(getNodes(e, XPathNodesAndNonEmptyText)))
+        }
+    }.toStream
   }
 
   def isEteNs(n: w3cd.Node) = xpath.evaluate("namespace-uri(.)",n).equals(ETE_NS)
 
-  def isWhitespace(n : w3cd.Node) : Boolean = n match {
-      case t: w3cd.Text => t.isElementContentWhitespace
-      case _ => false
-    }
+  /**
+   * If the node is Null ==> ""
+   * If the node has whitespace strip it
+   * @param n
+   * @return
+   */
+  def stripAllWhitespace(n : w3cd.Text) : String = Option(n.getNodeValue) match {
+    case Some(untrimmed)  => untrimmed.replaceAll("^[\\s]+|[\\s]+$","") // remove lead and trail whitespace
+    case None => ""
+  }
 
   /**
    * The node is of ete: namespace
@@ -140,7 +164,7 @@ object EteConfig {
         //case 0 => Vector(element.getTagName + "_id")
 
         case 0 => Vector.empty   // trying a fancier route of "automagic deriving from the column names"
-        case _ => (0 to keys.getLength).map(
+        case _ => (0 until keys.getLength).map(
                       idx => keys.item(idx).asInstanceOf[w3cd.Attr].getValue
                   ).toVector
 
@@ -152,6 +176,8 @@ object EteConfig {
    * Our NameSpace Context Handler
    */
   val NsContext = new NamespaceContext {
+    import scala.collection.JavaConverters._
+
     def getNamespaceURI(prefix: String) = prefix match {
       case ETE_NS_PREFIX => ETE_NS
       case _ => XMLConstants.NULL_NS_URI
@@ -160,14 +186,14 @@ object EteConfig {
       case ETE_NS => ETE_NS_PREFIX
       case _ => null
     }
-    def getPrefixes(namespaceURI: String) = null
+    def getPrefixes(namespaceURI: String):java.util.Iterator[String] = List(getPrefix(namespaceURI)).iterator.asJava
 
   }
 
   /*
    * Our XPath Handler
    */
-  def xpath = {
+  val xpath = {
     val xpath = javax.xml.xpath.XPathFactory.newInstance().newXPath()
     xpath.setNamespaceContext(NsContext)
     xpath
@@ -176,9 +202,20 @@ object EteConfig {
   def loadAsDocument(inputSource: InputSource):w3cd.Document = {
     val factory = DocumentBuilderFactory.newInstance()
     factory.setNamespaceAware(true)
+    // factory.setValidating(true)
+    // TODO
+    // factory.setSchema()
     factory.setIgnoringElementContentWhitespace(true)
     val builder = factory.newDocumentBuilder()
     return builder.parse(inputSource)
+  }
+
+  def getNodes(node: w3cd.Node, expression:String) : w3cd.NodeList = {
+    xpath.evaluate(expression, node, XPathConstants.NODESET).asInstanceOf[w3cd.NodeList]
+  }
+
+  def getNode(node: w3cd.Node, expression:String) : w3cd.Node = {
+    xpath.evaluate(expression, node, XPathConstants.NODE).asInstanceOf[w3cd.Node]
   }
 
 }

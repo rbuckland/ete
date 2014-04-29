@@ -1,10 +1,11 @@
 package io.straight.ete.source.extract.jdbc
 
-import io.straight.ete.source.data.{DataSet, DataRow, DataSetHolder}
-import io.straight.ete.config.{JdbcSourceData, XlsSourceData}
+import io.straight.ete.source.data.{DataSet, DataSetHolder}
+import io.straight.ete.config.{JdbcSourceData}
 import io.straight.ete.source.data.DataRow
 import io.straight.ete.source.data
-import java.sql.{Statement, ResultSetMetaData, ResultSet}
+import java.sql.{Connection, Statement, ResultSetMetaData, ResultSet}
+import JdbcTools.cleanly
 import org.slf4j.LoggerFactory
 
 /**
@@ -20,51 +21,69 @@ object JdbcSourceExtractor {
    * @param indexingFunction function that will take the datarow and the it, and index it.
    *
    */
-  def extractJdbcData(jdbcSourceData:JdbcSourceData,
+  def extractJdbcData(jdbcSourceData: JdbcSourceData,
                       dataSetHolder: DataSetHolder,
-                      indexingFunction: (Int,DataRow,DataSet) => DataRow
-                     ):String = {
+                      indexingFunction: (Int, DataRow, DataSet) => DataRow
+                       ): String = {
+
+    cleanly(jdbcSourceData.datasource.getConnection)(_.close()) {
+      conn =>
+
+        extractDataInternal(conn, jdbcSourceData, dataSetHolder, indexingFunction)
+
+    } match {
+      case Right(result) => result
+      case Left(ex) => throw ex
+    }
+
+  }
+
+  def extractDataInternal(conn: Connection,
+                          jdbcSourceData: JdbcSourceData,
+                          dataSetHolder: DataSetHolder,
+                          indexingFunction: (Int, DataRow, DataSet) => DataRow):String = {
 
     // step 1, execute the SQL.
-    val conn = jdbcSourceData.datasource.getConnection
 
-    jdbcSourceData.sqlStatements.foreach { strStmt =>
+    jdbcSourceData.sqlStatements.foreach {
+      strStmt =>
 
-      val preppedStatement = JdbcTools.prepSqlStatement(strStmt)
-      val stmt = conn.createStatement()
-      stmt.execute(preppedStatement)
+        val preppedStatement = JdbcTools.prepSqlStatement(strStmt)
+        val stmt = conn.createStatement()
+        stmt.execute(preppedStatement)
 
-      // nextResult returns an Either[ResultSet,Int]  .. rs or UpdateCount
-      StatementIterator(stmt).foreach {
+        // nextResult returns an Either[ResultSet,Int]  .. rs or UpdateCount
+        StatementIterator(stmt).foreach {
           // an updatecount
-          case Right(updateCount) => logger.trace("ignoring the update count (" + updateCount + ")")
+          case Right(updateCount) => logger.trace(s"ignoring the update count ($updateCount)")
           // a resultSet
           case Left(resultSet) => {
             val rsIter = RsIterator(resultSet)
             val columnHeaders = collectColumnHeaders(resultSet.getMetaData)
             val colSize = columnHeaders.size
 
-            logger.debug("ResultSet Headers " + columnHeaders)
+            logger.debug(s"ResultSet Headers $columnHeaders")
 
             // create a new dataSet
-            val dataSet = dataSetHolder.newDataSet(columnHeaders,jdbcSourceData.dataSetId)
+            val dataSet = dataSetHolder.newDataSet(columnHeaders, jdbcSourceData.dataSetId)
 
-            logger.debug(dataSet.dataRowIdxToColumnNames + "")
+            logger.debug(s"${dataSet.dataRowIdxToColumnNames}")
 
             // read the resultSet
             for (rs <- rsIter) {
               val rowData = (1 until colSize).map(c => rs.getObject(c)).toVector
               dataSet.addDataRow(indexingFunction(rs.getRow - 1, DataRow(rowData), dataSet))
-              logger.trace("Extracted row: " + rowData)
+              logger.trace(s"Extracted row: $rowData")
             }
-            logger.info("Read " + dataSet.size + " rows(s) to " + dataSet.dataSetId + " from " + jdbcSourceData)
+            logger.info(s"Read ${dataSet.size} rows(s) to ${dataSet.dataSetId} from $jdbcSourceData")
           }
-      }
+        }
     }
-    logger.info("Added " + dataSetHolder.dataSets.size + " dataSet(s) from " + jdbcSourceData)
-    return "Complete"
-  }
+    logger.info(s"Added ${dataSetHolder.dataSets.size} dataSet(s) from ${jdbcSourceData}")
 
+    return "Complete"
+
+  }
 
   /**
    *
@@ -76,14 +95,15 @@ object JdbcSourceExtractor {
       for (
         i <- 1 to rsmd.getColumnCount;
         name = rsmd.getColumnName(i)
-      ) yield ( name -> (i-1) )
-    ).toMap[String,Int]
+      ) yield (name -> (i - 1))
+      ).toMap[String, Int]
   }
 
 }
 
 case class RsIterator(val rs: ResultSet) extends Iterator[ResultSet] {
   def hasNext: Boolean = rs.next()
+
   def next(): ResultSet = rs
 }
 
@@ -101,10 +121,12 @@ case class StatementIterator(val statement: Statement) extends Iterator[Either[R
       haveCollectedFirstRs = true
     }
 
-    (statement.getResultSet,statement.getUpdateCount) match {
-      case (null,-1) => { statement.close(); None }
-      case (null,updateCount) => Some(Right(updateCount))
-      case (resultSet,_) => Some(Left(resultSet))
+    (statement.getResultSet, statement.getUpdateCount) match {
+      case (null, -1) => {
+        statement.close(); None
+      }
+      case (null, updateCount) => Some(Right(updateCount))
+      case (resultSet, _) => Some(Left(resultSet))
     }
   }
 
@@ -112,6 +134,7 @@ case class StatementIterator(val statement: Statement) extends Iterator[Either[R
     result = nextResult()
     result.isDefined
   }
+
   def next() = result.get
 }
 
@@ -147,10 +170,12 @@ case class WrappedStatement(statement: Statement) {
       haveCollectedFirstRs = true
     }
 
-    (statement.getResultSet,statement.getUpdateCount) match {
-      case (null,-1) => { statement.close(); None }
-      case (null,updateCount) => Some(Right(updateCount))
-      case (resultSet,_) => Some(Left(resultSet))
+    (statement.getResultSet, statement.getUpdateCount) match {
+      case (null, -1) => {
+        statement.close(); None
+      }
+      case (null, updateCount) => Some(Right(updateCount))
+      case (resultSet, _) => Some(Left(resultSet))
     }
   }
 
@@ -161,9 +186,9 @@ class StatementIterator2(val statement: Statement) extends Iterator[Either[Resul
 
   private var haveCollectedFirstRs: Boolean = false
   private var resultSet: ResultSet = null
-  private var updateCount:Int = -2
+  private var updateCount: Int = -2
 
-  def hasNext:Boolean = {
+  def hasNext: Boolean = {
     updateCount = statement.getUpdateCount()
 
     // this will move us on to the next
@@ -180,9 +205,9 @@ class StatementIterator2(val statement: Statement) extends Iterator[Either[Resul
   }
 
   def next() = {
-    (resultSet,updateCount) match {
-      case (null,updateCount) => Right(updateCount)
-      case (resultSet,_) => Left(resultSet)
+    (resultSet, updateCount) match {
+      case (null, updateCount) => Right(updateCount)
+      case (resultSet, _) => Left(resultSet)
     }
   }
 }

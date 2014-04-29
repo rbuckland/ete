@@ -59,14 +59,11 @@ case class DataSetAttachedNode(
      * get the first "id" column, or if not found, the first column
      *
      */
-    if (!columnNames.isEmpty) {
+    if (primaryKeys.isEmpty && !columnNames.isEmpty) {
       // take the first column that ends in "id" or take the first column if no "id" is found
-      val priKeys = Option(columnNames.filter(_.toLowerCase.endsWith("id")).head) match {
-        case Some(idPriKey) => Vector(idPriKey)
-        case None => Vector(columnNames.head)
-      }
-      logger.info("Column names provided. Selected primary key as " + priKeys)
-      copy( primaryKeys = priKeys)
+      val priKeys = columnNames.find(_.toLowerCase.endsWith("id")).getOrElse(columnNames.head)
+      logger.info(s"Column names provided. Selected primary key as $priKeys")
+      copy( primaryKeys = Vector(priKeys))
     } else {
       this
     }

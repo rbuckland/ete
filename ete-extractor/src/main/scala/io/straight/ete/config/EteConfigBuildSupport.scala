@@ -23,8 +23,11 @@ object EteConfigBuildSupport {
   def createBasicDefaultTree(rootNodeName: Option[String] = None, dataSetsToPKs: List[Tuple2[String, Vector[String]]]) =
     createTree(rootNodeName, createSubForestOfDataSetAttachedNodes(dataSetsToPKs, Vector.empty))
 
-  def createTree(rootNodeName: Option[String], subTreeCreator: => Stream[Tree[OutputNode]]): Tree[OutputNode] =
+  def createTree(rootNodeName: Option[String], subTreeCreator: => Stream[Tree[OutputNode]]): Tree[OutputNode] = {
+    println(s"Create Tree called $rootNodeName")
     Tree.node(aio(SimpleNode(rootNodeName.getOrElse(EteConfig.DEFAULT_OUTPUT_NODE))), subTreeCreator)
+  }
+
 
   /**
    * Most basic, Create a Tree -- all of DataSetAttachedNodes
