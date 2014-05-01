@@ -53,7 +53,7 @@ class ResultSetToDataSetSpec extends FlatSpec with EasyMockSugar with ShouldMatc
 
     val rootNode = Tree.node(aio(SimpleNode("rootNode")),Stream(Tree.node(aio(productDataSet),Stream(Tree.leaf(aio(dataDataSet))))))
 
-    val config = EteConfig.createNew("foobar", rootNode, Vector(jdbc))
+    val config = EteConfig.createEteConfig("foobar", rootNode, Vector(jdbc))
 
     val resultsDir = new File("target/test-results/")
     resultsDir.mkdirs()
@@ -63,7 +63,7 @@ class ResultSetToDataSetSpec extends FlatSpec with EasyMockSugar with ShouldMatc
     Vector("json", "xml").foreach(t => {
       val outFile = new File(resultsDir, "jdbcMappingSpec_sampleout." + t)
       val outs = new FileOutputStream(outFile)
-      EteExecutor.generate(config, outs, Vector.empty, t)
+      EteExecutor.generate(config, outs, Vector.empty, t, true)
       outs.flush()
       println("wrote " + t + " results to " + outFile.getAbsoluteFile)
     }

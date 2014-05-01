@@ -3,9 +3,7 @@ package io.straight.ete.source.extract
 import io.straight.ete.config.{EteConfig, SourceDataConfig}
 import io.straight.ete.source.data.{DataSet, DataRow, DataSetHolder}
 
-/**
- * @author rbuckland
- */
+
 /**
  * @author rbuckland
  */

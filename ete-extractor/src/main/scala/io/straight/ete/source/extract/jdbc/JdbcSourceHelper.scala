@@ -19,13 +19,22 @@ object JdbcSourceHelper extends SourceHelper[JdbcSourceData] {
   val logger = LoggerFactory.getLogger(JdbcSourceHelper.getClass)
 
     def enrich(j: JdbcSourceData): JdbcSourceData = {
+
       try {
         j match {
-          case simple: SimpleJdbcSourceData => simple.copy(datasource = testConnect(JdbcTools.dataSourceFor(simple.jdbcDriver,simple.jdbcUrl)))
+          // the datasource may already have been set (think Spring Bean)
+          case jdbc : JdbcSourceData if jdbc.datasource.isDefined => jdbc
+
+          // no username / password
+          case simple: SimpleJdbcSourceData => simple.copy(datasource = testConnect(simple.jdbcUrl, JdbcTools.dataSourceFor(simple.jdbcDriver,simple.jdbcUrl)))
+
+          // username and password
           case simpleUP: SimpleUserPassJdbcSourceData =>
-            simpleUP.copy(datasource = testConnect(JdbcTools.dataSourceFor(simpleUP.jdbcDriver,simpleUP.jdbcUrl, simpleUP.username, simpleUP.password)))
+            simpleUP.copy(datasource = testConnect(simpleUP.jdbcUrl, JdbcTools.dataSourceFor(simpleUP.jdbcDriver,simpleUP.jdbcUrl, simpleUP.username, simpleUP.password)))
+
+          // jndi
           case jndiSrc: JndiJdbcSourceData =>
-            jndiSrc.copy(datasource = testConnect(JdbcTools.dataSourceFor(jndiSrc.jndiUrl)))
+            jndiSrc.copy(datasource = testConnect(jndiSrc.jndiUrl, JdbcTools.dataSourceFor(jndiSrc.jndiUrl)))
         }
       } catch {
         case e: SQLException => throw new SourceValidationException(j.toString,"SQLException: " + e.getLocalizedMessage,e)
@@ -36,7 +45,7 @@ object JdbcSourceHelper extends SourceHelper[JdbcSourceData] {
   /**
    * Make a connection and close it. If it all works .. good
    */
-  def testConnect(ds: DataSource) : DataSource = {
+  def testConnect(name: String, ds: DataSource) : Option[(String,DataSource)] = {
     // typical JDBC Connection protection connected malarkey
     var conn: Connection = null
     try {
@@ -50,7 +59,7 @@ object JdbcSourceHelper extends SourceHelper[JdbcSourceData] {
     } finally {
       if (conn != null) conn.close
     }
-    ds
+    Some(name -> ds)
   }
 
   /**

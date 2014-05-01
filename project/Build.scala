@@ -24,7 +24,7 @@ object RootBuild extends Build {
   import Settings._
   import Dependencies._
 
-  lazy val eteRoot = Project("root", file("."))
+  lazy val eteRoot = Project(projectName, file("."))
     .aggregate(eteExtractor,eteToolsBackEnd)
     .settings(buildSettings: _*)
 
@@ -38,7 +38,8 @@ object RootBuild extends Build {
     .settings(Revolver.settings: _*)
     .settings(assemblySettings: _*)
     .settings(libraryDependencies ++=
-      (commonDeps ++ ioStraightFramework ++ subcut ++ ioStraightFramework  ++ googleApiDep ++ sprayContribSession).map(_.exclude("commons-logging", "commons-logging"))
+      (commonDeps ++ ioStraightFramework ++ subcut ++ ioStraightFramework
+        ++ googleApiDep ++ sprayContribSession).map(_.exclude("commons-logging", "commons-logging"))
     )
 }
 

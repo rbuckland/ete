@@ -13,19 +13,32 @@ import scalaz._
 import Scalaz._
 import org.w3c.dom.NodeList
 import io.straight.ete.util.CompletelyUnsupportedError
+import java.io.File
 
 /**
  * @author rbuckland
  */
 case class EteConfig(name: String, rootMapping: Tree[OutputNode], sources: Vector[SourceDataConfig])
 
-object EteConfig {
-
-  val logger = LoggerFactory.getLogger(getClass)
+object EteConstants {
   val ETE_NS = "http://io.straight/ete"
   val ETE_NS_PREFIX = "ete"
   val eteNs = scala.xml.NamespaceBinding("ete",ETE_NS,null)
-  val DEFAULT_OUTPUT_NODE = "rootData"
+  val DEFAULT_OUTPUT_NODE = "data"
+}
+
+object EteSourceType extends Enumeration {
+  type Source = Value
+  val XLS, XLSX, CSV, SQL = Source
+}
+
+object EteConfig {
+
+  import EteConstants._
+  import io.straight.ete.util.XmlUtils._
+
+  val logger = LoggerFactory.getLogger(getClass)
+  val DEFAULT_OUTPUT_NODE = "data"
 
   // this works in Oxygen .. but fails to collectr what I want here
   // text()[normalize-space(.) != ''] | //node()[local-name()!=''] .. reverting to Scala
@@ -46,11 +59,12 @@ object EteConfig {
    */
   def build(configXml: w3cd.Document) : EteConfig = {
     val configName = xpath.evaluate("/ete:config/@name",configXml)
+    val allSourceNodes = xpath.evaluate("/ete:config/ete:source",configXml,XPathConstants.NODESET).asInstanceOf[org.w3c.dom.NodeList]
     val outputNode = xpath.evaluate("/ete:config/ete:output",configXml,XPathConstants.NODE).asInstanceOf[org.w3c.dom.Node]
-
     println(s">> outputNode == ${outputNode.getLocalName}")
+    val sources: Vector[SourceDataConfig] = createSourcesConfig(allSourceNodes)
     // todo collect the sources
-    return createNew(configName,createTreeFromXml(outputNode),null)
+    return createEteConfig(configName,createTreeFromXml(outputNode),sources)
   }
 
   /**
@@ -60,7 +74,7 @@ object EteConfig {
    * @param sources
    * @return
    */
-  def createNew(name: String, rootMapping: Tree[OutputNode], sources: Vector[SourceDataConfig]):EteConfig = {
+  def createEteConfig(name: String, rootMapping: Tree[OutputNode], sources: Vector[SourceDataConfig]):EteConfig = {
 
     // we need to check and make sure the root mapping is a simple node.. it always has to be
     val actualRootMapping: Tree[OutputNode] = rootMapping match {
@@ -69,6 +83,105 @@ object EteConfig {
     }
     return EteConfig(name, actualRootMapping ,sources)
   }
+
+  /**
+   * Iterate through the source nodes and create relevant config
+   * @param sourcesNodes
+   * @return
+   */
+  def createSourcesConfig(sourcesNodes: org.w3c.dom.NodeList):Vector[SourceDataConfig] = {
+    ((0 until sourcesNodes.getLength) map { idx =>
+      val name = sourcesNodes.item(idx).getAttributes.getNamedItem("name").getNodeValue
+
+      // if there is a rowlimit, collect as Option[String]
+      val rowLimit = collectRowLimit(sourcesNodes.item(idx))
+
+      sourcesNodes.item(idx).getAttributes.getNamedItem("type").getNodeValue.toLowerCase match {
+        case "xls" => createSourcesForXls(name, rowLimit, sourcesNodes.item(idx))
+        case "xlsx" => createSourcesForXls(name, rowLimit, sourcesNodes.item(idx))
+        case "sql" => createSourcesForSql(name, rowLimit, sourcesNodes.item(idx))
+        case "csv" =>  throw new UnsupportedEteConfigError("CSV Sources are not yet implemented")
+        case unkn: Any => throw new UnsupportedEteConfigError(s"The type [$unkn] on source element /config/source[@name='$name'] is unsupported/unknown")
+      }
+    }).toVector.flatten // Vector[Vector[SourceDataConfig] to Vector[SourceDataConfig]
+  }
+
+  /**
+   * Will generate a Vector of JdbcSourceData objects
+   *
+   * Supports - JndiJdbcSourceData, SimpleJdbcSourceData, SimpleUserPassJdbcSourceData
+   * @param name
+   * @param parentRowLimit
+   * @param sourceNode
+   * @return
+   */
+  def createSourcesForSql(name: String, parentRowLimit:Option[String], sourceNode: w3cd.Node): Vector[JdbcSourceData] = ???
+
+  /**
+   * Create a list of XlsSourceConfig
+   * @param name
+   * @param parentRowLimit
+   * @param sourceNode
+   * @return
+   */
+  def createSourcesForXls(name: String, parentRowLimit:Option[String], sourceNode: w3cd.Node): Vector[XlsSourceData] = {
+    val sheetNodes = xpath.evaluate("ete:sheetname",sourceNode,XPathConstants.NODESET).asInstanceOf[org.w3c.dom.NodeList]
+    val xlsUri = sourceNode.getAttributes.getNamedItem("uri").getNodeValue
+    if (sheetNodes.getLength > 0) {
+      collectXlsSourceBySheetNames(name, sheetNodes, xlsUri, parentRowLimit)
+    } else {
+       throw new UnsupportedEteConfigError("Sorry - we need you to define the sheetnames in the XML: Future versions may use the XlsInspector")
+       /*
+        Thge XLSInpsector has a method that derives the XLSSourceConfig from the XLS. However I want to
+        clean that code up and it is a rabbit warren around IOStream handling .. so holding that off for the moment.
+        (it stems that I want to real from http:// URLs but do I cache the result using ete-extractor or do I have (always)
+        something else provide a File for ete-extractor
+        context is - // http://poi.apache.org/spreadsheet/quick-guide.html#FileInputStream
+        */
+    }
+
+  }
+
+  /**
+   * This processes the "sheetname" nodes inside of
+   *
+   * <pre>
+   *   <ete:source name="products" type="xlsx" uri="file://src/test/resources/sample-products-options-spreadsheet.xlsx" rowlimit="1-20">
+         <ete:sheetname rowlimit="2-4">products</ete:sheetname>
+         <ete:sheetname>otherSheet</ete:sheetname>
+       </ete:source>
+     </pre>
+
+   * @param name
+   * @param sheetNodes
+   * @param xlsUri
+   * @param parentRowLimit
+   * @return
+   */
+  private def collectXlsSourceBySheetNames(name:String,
+                                           sheetNodes: w3cd.NodeList,
+                                           xlsUri: String,
+                                           parentRowLimit: Option[String]
+                                          ):Vector[XlsSourceData] = {
+      ((0 until sheetNodes.getLength) map { idx =>
+
+        val sheetName = sheetNodes.item(idx).getNodeValue
+
+        val rowLimit = collectRowLimit(sheetNodes.item(idx)) match {
+          case None => parentRowLimit
+          case rl: Some[String] => rl
+        }
+
+        XlsSourceData(dataSetId = s"$name-$idx",
+          file = new File(xlsUri),
+          sourceName = xlsUri,
+          sheetName = Some(sheetName),
+          rowRestrictor = rowLimit)
+
+      }).toVector
+  }
+
+  private def collectRowLimit(node: w3cd.Node):Option[String] =  Option(node.getAttributes.getNamedItem("rowlimit")).map(_.getNodeValue)
 
 
   /**
@@ -171,52 +284,6 @@ object EteConfig {
       }
   }
 
-
-  /*
-   * Our NameSpace Context Handler
-   */
-  val NsContext = new NamespaceContext {
-    import scala.collection.JavaConverters._
-
-    def getNamespaceURI(prefix: String) = prefix match {
-      case ETE_NS_PREFIX => ETE_NS
-      case _ => XMLConstants.NULL_NS_URI
-    }
-    def getPrefix(namespaceURI: String) = namespaceURI match {
-      case ETE_NS => ETE_NS_PREFIX
-      case _ => null
-    }
-    def getPrefixes(namespaceURI: String):java.util.Iterator[String] = List(getPrefix(namespaceURI)).iterator.asJava
-
-  }
-
-  /*
-   * Our XPath Handler
-   */
-  val xpath = {
-    val xpath = javax.xml.xpath.XPathFactory.newInstance().newXPath()
-    xpath.setNamespaceContext(NsContext)
-    xpath
-  }
-
-  def loadAsDocument(inputSource: InputSource):w3cd.Document = {
-    val factory = DocumentBuilderFactory.newInstance()
-    factory.setNamespaceAware(true)
-    // factory.setValidating(true)
-    // TODO
-    // factory.setSchema()
-    factory.setIgnoringElementContentWhitespace(true)
-    val builder = factory.newDocumentBuilder()
-    return builder.parse(inputSource)
-  }
-
-  def getNodes(node: w3cd.Node, expression:String) : w3cd.NodeList = {
-    xpath.evaluate(expression, node, XPathConstants.NODESET).asInstanceOf[w3cd.NodeList]
-  }
-
-  def getNode(node: w3cd.Node, expression:String) : w3cd.Node = {
-    xpath.evaluate(expression, node, XPathConstants.NODE).asInstanceOf[w3cd.Node]
-  }
 
 }
 

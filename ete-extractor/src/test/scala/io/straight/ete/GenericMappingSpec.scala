@@ -27,7 +27,7 @@ class GenericMappingSpec extends FlatSpec with ShouldMatchers {
 
     Vector("json", "xml").foreach(t => {
           val out = new ByteArrayOutputStream()
-          EteExecutor.generate(config, out, Vector.empty, t)
+          EteExecutor.generate(config, out, Vector.empty, t, true)
           out.flush()
           println(new String(out.toByteArray, "UTF-8"))
         }

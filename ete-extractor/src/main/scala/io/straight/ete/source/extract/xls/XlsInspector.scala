@@ -58,6 +58,7 @@ object XlsInspector {
       sheet: HSSFSheet = workbook.getSheetAt(i)
     ) yield XlsSourceData(sheet.getSheetName,file,filename,Some(sheet.getSheetName), None)
 
+
     xlsSources.toVector
   }
 

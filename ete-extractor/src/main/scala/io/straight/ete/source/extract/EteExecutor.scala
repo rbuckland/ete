@@ -2,8 +2,8 @@ package io.straight.ete.source.extract
 
 import io.straight.ete.config._
 import org.slf4j.LoggerFactory
-import java.io.{OutputStream, Writer}
-import io.straight.ete.source.data.{DataSetException, EhcacheDataSetHolder, DataSetHolder}
+import java.io.OutputStream
+import io.straight.ete.source.data.{DataSetException, EhcacheDataSetHolder}
 import io.straight.ete.source.extract.xls.{XlsSourceHelper, XlsSourceExtractor}
 import io.straight.ete.config.Parameter
 import io.straight.ete.config.XmlOutputStyle
@@ -13,8 +13,8 @@ import io.straight.ete.source.extract.jdbc.{JdbcSourceHelper, JdbcSourceExtracto
 import io.straight.ete.source.data.indexing.IndexMaster
 import java.sql.SQLException
 import io.straight.ete.core.EteGeneralException
-import io.straight.ete.worker.EteDataSetMapper
 import scalaz.Show
+import javax.sql.DataSource
 
 /**
  * @author rbuckland
@@ -23,13 +23,17 @@ object EteExecutor {
 
   val logger = LoggerFactory.getLogger(EteExecutor.getClass)
 
-  def generate(config: EteConfig, outStream: OutputStream, parameters: Vector[Parameter], outputStyle: String) = {
+  def generate(config: EteConfig, outStream: OutputStream, datasources: Map[String,DataSource], parameters: Vector[Parameter], outputStyle: String, prettyPrint: Boolean) = {
+
+  }
+
+  def generate(config: EteConfig, outStream: OutputStream, parameters: Vector[Parameter], outputStyle: String, prettyPrint: Boolean) = {
     try {
       /*
        * Enrich all the Sources
        */
       val enrichedConfig = config.copy(sources = doEnrich(config.sources))
-      internalGenerate(enrichedConfig,outStream,parameters,outputStyle)
+      internalGenerate(enrichedConfig,outStream,parameters,outputStyle,  prettyPrint)
       doClose(config.sources)
     } catch {
       case e: SourceValidationException => throw e
@@ -47,11 +51,11 @@ object EteExecutor {
   }
 
 
-  def internalGenerate(config: EteConfig, outStream: OutputStream, parameters: Vector[Parameter], outputStyle: String) = {
+  def internalGenerate(config: EteConfig, outStream: OutputStream, parameters: Vector[Parameter], outputStyle: String,  prettyPrint: Boolean) = {
 
     val outputStyleHandler = outputStyle match {
-      case "json" => JsonOutputStyle.create(outStream,"jsonData")
-      case "xml" => XmlOutputStyle.create(outStream)
+      case "json" => JsonOutputStyle.create(outStream,"jsonData", prettyPrint)
+      case "xml" => XmlOutputStyle.create(outStream, prettyPrint)
     }
 
     val dataSetHolder = new EhcacheDataSetHolder()
@@ -88,7 +92,12 @@ object EteExecutor {
 
   }
 
-
+  /**
+   * For XLS this is loading up the workbooks, for SQL this is connecting to the databases
+   * For URL based files, this is pulling and caching the content
+   * @param sources
+   * @return
+   */
   def doEnrich(sources: Vector[SourceDataConfig]): Vector[SourceDataConfig] = {
     sources.map {
           case x: XlsSourceData => XlsSourceHelper.enrich(x)
@@ -105,6 +114,10 @@ object EteExecutor {
         case x: XlsSourceData => XlsSourceHelper.cleanup(x)
         case j: JdbcSourceData => JdbcSourceHelper.cleanup(j)
     }
+  }
+
+  private def setDataSources(source: JdbcSourceData) = {
+
   }
 
 }

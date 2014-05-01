@@ -26,7 +26,7 @@ object JdbcSourceExtractor {
                       indexingFunction: (Int, DataRow, DataSet) => DataRow
                        ): String = {
 
-    cleanly(jdbcSourceData.datasource.getConnection)(_.close()) {
+    cleanly(jdbcSourceData.datasource.get._2.getConnection)(_.close()) {
       conn =>
 
         extractDataInternal(conn, jdbcSourceData, dataSetHolder, indexingFunction)

@@ -1,17 +1,43 @@
 <ete:config xmlns:ete="http://io.straight/ete" name="myBasicConfig">
 
-    <ete:source name="products" type="xlsx" uri="file://src/test/resources/sample-products-options-spreadsheet.xlsx">
-        <ete:sheetname>products</ete:sheetname>
-        <ete:rowrange>1-20</ete:rowrange>
+    <!-- rowlimit will be a default -->
+    <ete:source name="products" type="xlsx" uri="file://src/test/resources/sample-products-options-spreadsheet.xlsx" rowlimit="1-20">
+        <ete:sheetname rowlimit="2-4">products</ete:sheetname>
+        <ete:sheetname>otherSheet</ete:sheetname>
     </ete:source>
 
     <ete:source name="options" type="xlsx" uri="file://src/test/resources/sample-products-options-spreadsheet.xlsx">
         <ete:sheetname>options</ete:sheetname>
     </ete:source>
 
-    <ete:source name="prices" type="sql" uri="jdbc:h2:file:src/test/support/sample-db">
+    <!--
+       We will look up the DataSource via JNDI
+    -->
+    <ete:source name="prices" type="sql" jndi="comp/env/SomeJndi">
         <ete:sql>select * from prices</ete:sql>
     </ete:source>
+
+    <!--
+       We expect that the dataSource(s) is provided to us prior to executiong via a Map[String,DataSource]
+    -->
+    <ete:source name="prices" type="sql" datasourceName="someName">
+        <ete:sql>select * from prices</ete:sql>
+    </ete:source>
+
+    <!--
+       Datasource has no username and password (ala H2)
+    -->
+    <ete:source name="prices" type="sql" jdbcUrl="jdbc:h2:file:src/test/support/sample-db" driver="org.somedriver.classx.Driver">
+        <ete:sql>select * from prices</ete:sql>
+    </ete:source>
+
+    <!--
+       datasource does have username/passwords .. use dbcp as your driver (or c3po)
+    -->
+    <ete:source name="prices" type="sql" jdbcUrl="jdbc:jtds:my.mssqlserver.com:1433/TheDatabase_v10" driver="org.somedriver.classx.Driver" username="" password="">
+        <ete:sql>select * from prices</ete:sql>
+    </ete:source>
+
 
     <ete:output>
         <products>

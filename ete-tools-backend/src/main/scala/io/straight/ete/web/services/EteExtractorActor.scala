@@ -24,8 +24,8 @@ class EteExtractorActor extends Actor {
     val outputStream = new ByteArrayOutputStream()
     extract.outputType match {
         // TODO create some nice formatter enums inside ete
-      case EteOutputType.XML => EteExecutor.generate(eteConfig,outputStream,Vector.empty,"xml")
-      case EteOutputType.JSON => EteExecutor.generate(eteConfig,outputStream,Vector.empty,"json")
+      case EteOutputType.XML => EteExecutor.generate(eteConfig,outputStream,Vector.empty,"xml", false)
+      case EteOutputType.JSON => EteExecutor.generate(eteConfig,outputStream,Vector.empty,"json", false)
 
     }
 
